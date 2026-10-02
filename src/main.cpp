@@ -17,7 +17,10 @@ Servo claw;
 int jiaoduX = 90;
 int jiaoduY = 90;
 int jiaoduZ = 90;
-int jiaoduZhua = 0;
+// 爪子当前角度
+int dangqianZhua = 0;
+// 爪子目标角度
+int mubiaoZhua = 0;
 // 摇杆中心值
 const int yaogan_zhongxin = 512;
 // 死区大小(防止轻微触动抖动)
@@ -71,14 +74,46 @@ void gengxinYaogan()
     }
 
     //限制角度
-
     jiaoduX = constrain(jiaoduX, 0, 180);
     jiaoduY = constrain(jiaoduY, 0, 180);
 
     // 输出舵机角度 
-
     servoX.write(jiaoduX);
     servoY.write(jiaoduY);
+}
+//读取爪子命令函数
+void chuliChuanKou()
+{
+    if (Serial.available() > 0)
+    {
+        char mingling = Serial.read();
+
+        // O：爪子打开
+        if (mingling == 'O')
+        {
+            mubiaoZhua = 90;
+        }
+
+        // S：爪子关闭
+        else if (mingling == 'S')
+        {
+            mubiaoZhua = 0;
+        }
+    }
+}
+//更新爪子函数
+void gengxinZhua()
+{
+    if (dangqianZhua < mubiaoZhua)
+    {
+        dangqianZhua++;
+    }
+    else if (dangqianZhua > mubiaoZhua)
+    {
+        dangqianZhua--;
+    }
+
+    claw.write(dangqianZhua);
 }
 void setup()//执行一次
 {
@@ -91,13 +126,14 @@ void setup()//执行一次
     servoX.write(jiaoduX);
     servoY.write(jiaoduY);
     servoZ.write(jiaoduZ);
-    claw.write(jiaoduZhua);
+   claw.write(dangqianZhua);
     // 开启串口
     Serial.begin(9600);//有可能要调成38400
 }
 
 void loop()//反复执行
-{gengxinYaogan();
-
+{   gengxinYaogan();
+    chuliChuanKou();
+    gengxinZhua();
     delay(20);
 }
