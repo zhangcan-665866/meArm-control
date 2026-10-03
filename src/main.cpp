@@ -25,6 +25,11 @@ int mubiaoZhua = 0;
 const int yaogan_zhongxin = 512;
 // 死区大小(防止轻微触动抖动)
 const int siqu = 30;
+// 延迟时间范围
+const int minYanshi = 5;
+const int maxYanshi = 50;
+// 机械臂延迟时间(速度)
+int yanshi = 20;
 void gengxinYaogan()
 {
     // 读取摇杆X和Y
@@ -99,7 +104,27 @@ void chuliChuanKou()
         {
             mubiaoZhua = 0;
         }
+         // H：提高速度
+        else if (mingling == 'H')
+        {
+            yanshi -= 5;
+            yanshi = constrain(
+                yanshi,
+                minYanshi,
+                maxYanshi
+            );
+        }
+        // L：降低速度
+        else if (mingling == 'L')
+        {
+            yanshi += 5;
+            yanshi = constrain(
+                yanshi,
+                minYanshi,
+                maxYanshi
+            );
     }
+}
 }
 //更新爪子函数
 void gengxinZhua()
@@ -135,5 +160,5 @@ void loop()//反复执行
 {   gengxinYaogan();
     chuliChuanKou();
     gengxinZhua();
-    delay(20);
+    delay(yanshi);
 }
