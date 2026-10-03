@@ -278,24 +278,20 @@ void setup()//执行一次
 
 void loop()
 {
-    // 每轮都及时处理串口命令
+    // 每轮处理串口命令
     chuliChuanKou();
-
-    // 每轮都读取摇杆，保证实时响应
+    // 每轮都读取摇杆
     if (moshi == 0)
     {
         gengxinYaogan();
     }
-
     // 获取当前运行时间
     unsigned long xianzai = millis();
-
     // 只有达到设定时间间隔，才更新舵机
     if (xianzai - shangciGengxinShijian >= (unsigned long)yanshi)
     {
         // 记录本次更新时间
         shangciGengxinShijian = xianzai;
-
         // 每经过yanshi毫秒移动1度
         gengxinDuoji();
         gengxinZhua();
