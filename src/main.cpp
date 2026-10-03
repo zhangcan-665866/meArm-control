@@ -8,6 +8,8 @@ const int CLAW_PIN = 6;
 //摇杆引脚
 const int yaogan_X_PIN = A0;
 const int yaogan_Y_PIN = A1;
+const int yaogan_Z_PIN = A2;
+const int yaogan_Zhua_PIN = A3;
 //创建四个舵机对象
 Servo servoX;
 Servo servoY;
@@ -49,23 +51,24 @@ int shuruJiaodu = 0;
 bool youShuzi = false;
 void gengxinYaogan()
 {
-    // 读取摇杆X和Y
+    // 读取两个摇杆的四个轴
     int yaoganX = analogRead(yaogan_X_PIN);
     int yaoganY = analogRead(yaogan_Y_PIN);
+    int yaoganZ = analogRead(yaogan_Z_PIN);
+    int yaoganZhua = analogRead(yaogan_Zhua_PIN);
 
-    // 计算偏移量
+    // 计算四个轴相对于摇杆中心的偏移量
     int pianyiX = yaoganX - yaogan_zhongxin;
     int pianyiY = yaoganY - yaogan_zhongxin;
-    //X轴控制
+    int pianyiZ = yaoganZ - yaogan_zhongxin;
+    int pianyiZhua = yaoganZhua - yaogan_zhongxin;
 
+    // X轴控制底座舵机
     if (abs(pianyiX) > siqu)
     {
-        // 根据摇杆偏移量计算移动步数动的越大越快
+        // 摇杆偏移越大，单次移动步数越多
         int bushuX = map(abs(pianyiX), siqu, 511, 1, 3);
-
-        // 限制步数
         bushuX = constrain(bushuX, 1, 3);
-
         if (pianyiX > 0)
         {
             mubiaoJiaoduX += bushuX;
@@ -75,29 +78,56 @@ void gengxinYaogan()
             mubiaoJiaoduX -= bushuX;
         }
     }
-    //Y轴控制
 
+    // Y轴控制左边舵机
     if (abs(pianyiY) > siqu)
     {
-        // 根据摇杆偏移量计算移动步数
         int bushuY = map(abs(pianyiY), siqu, 511, 1, 3);
-
-        // 限制步数
         bushuY = constrain(bushuY, 1, 3);
 
         if (pianyiY > 0)
         {
-           mubiaoJiaoduY  += bushuY;
+            mubiaoJiaoduY += bushuY;
         }
         else
         {
-            mubiaoJiaoduY  -= bushuY;
+            mubiaoJiaoduY -= bushuY;
         }
     }
-
-    //限制角度
+    // 控制z轴
+    if (abs(pianyiZ) > siqu)
+    {
+        int bushuZ = map(abs(pianyiZ), siqu, 511, 1, 3);
+        bushuZ = constrain(bushuZ, 1, 3);
+        if (pianyiZ > 0)
+        {
+            mubiaoJiaoduZ += bushuZ;
+        }
+        else
+        {
+            mubiaoJiaoduZ -= bushuZ;
+        }
+    }
+    // 控制爪子
+    if (abs(pianyiZhua) > siqu)
+    {
+        int bushuZhua = map(abs(pianyiZhua), siqu, 511, 1, 3);
+        bushuZhua = constrain(bushuZhua, 1, 3);
+        if (pianyiZhua > 0)
+        {
+            mubiaoZhua += bushuZhua;
+        }
+        else
+        {
+            mubiaoZhua -= bushuZhua;
+        }
+    }
+    // 限制四个目标角度
     mubiaoJiaoduX = constrain(mubiaoJiaoduX, 0, 180);
-    mubiaoJiaoduY = constrain(mubiaoJiaoduY , 0, 180);
+    mubiaoJiaoduY = constrain(mubiaoJiaoduY, 0, 180);
+    mubiaoJiaoduZ = constrain(mubiaoJiaoduZ, 0, 180);
+    // 爪子暂按0到90度，机械臂到货后再校准
+    mubiaoZhua = constrain(mubiaoZhua, 0, 90);
 }
 //保存爪子角度
 void baocunJiaodu()
