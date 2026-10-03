@@ -14,9 +14,14 @@ Servo servoY;
 Servo servoZ;
 Servo claw;
 // 设置初始角度为90°
-int jiaoduX = 90;
-int jiaoduY = 90;
-int jiaoduZ = 90;
+// X/Y/Z当前角度
+int dangqianJiaoduX = 90;
+int dangqianJiaoduY = 90;
+int dangqianJiaoduZ = 90;
+// X/Y/Z目标角度
+int mubiaoJiaoduX = 90;
+int mubiaoJiaoduY = 90;
+int mubiaoJiaoduZ = 90;
 // 爪子当前角度
 int dangqianZhua = 0;
 // 爪子目标角度
@@ -30,6 +35,10 @@ const int minYanshi = 5;
 const int maxYanshi = 50;
 // 机械臂延迟时间(速度)
 int yanshi = 20;
+// 控制模式
+// 0 = 摇杆模式
+// 1 = 串口模式
+int moshi = 0;
 // 当前舵机
 char dangqianDuoji = 0;
 // 当前正在读取的角度
@@ -57,11 +66,11 @@ void gengxinYaogan()
 
         if (pianyiX > 0)
         {
-            jiaoduX += bushuX;
+            mubiaoJiaoduX += bushuX;
         }
         else
         {
-            jiaoduX -= bushuX;
+            mubiaoJiaoduX -= bushuX;
         }
     }
     //Y轴控制
@@ -76,23 +85,19 @@ void gengxinYaogan()
 
         if (pianyiY > 0)
         {
-            jiaoduY += bushuY;
+           mubiaoJiaoduY  += bushuY;
         }
         else
         {
-            jiaoduY -= bushuY;
+            mubiaoJiaoduY  -= bushuY;
         }
     }
 
     //限制角度
-    jiaoduX = constrain(jiaoduX, 0, 180);
-    jiaoduY = constrain(jiaoduY, 0, 180);
-
-    // 输出舵机角度 
-    servoX.write(jiaoduX);
-    servoY.write(jiaoduY);
+    mubiaoJiaoduX = constrain(mubiaoJiaoduX, 0, 180);
+    mubiaoJiaoduY = constrain(mubiaoJiaoduY , 0, 180);
 }
-//读取爪子命令函数
+//保存爪子角度
 void baocunJiaodu()
 {
     // 如果没有读取到数字，就不处理
@@ -104,18 +109,25 @@ void baocunJiaodu()
     switch (dangqianDuoji)
 {
     case 'x':
-        jiaoduX = constrain(shuruJiaodu, 0, 180);
+        mubiaoJiaoduX = constrain(shuruJiaodu, 0, 180);
+        Serial.print("X目标角度 = ");
+        Serial.println(mubiaoJiaoduX);
         break;
     case 'y':
-        jiaoduY = constrain(shuruJiaodu, 0, 180);
+        mubiaoJiaoduY = constrain(shuruJiaodu, 0, 180);
+        Serial.print("Y目标角度 = ");
+        Serial.println(mubiaoJiaoduY);
         break;
     case 'z':
-        jiaoduZ = constrain(shuruJiaodu, 0, 180);
+       mubiaoJiaoduZ = constrain(shuruJiaodu, 0, 180);
+       Serial.print("Z目标角度 = ");
+       Serial.println(mubiaoJiaoduZ);
         break;
     // 下一轮
+}
     shuruJiaodu = 0;
     youShuzi = false;
-}
+
 }
 void chuliChuanKou()
 {
@@ -127,12 +139,14 @@ void chuliChuanKou()
         if (mingling == 'O')
         {
             mubiaoZhua = 90;
+            Serial.println("爪子：打开");
         }
-
+        
         // S：爪子关闭
         else if (mingling == 'S')
         {
             mubiaoZhua = 0;
+            Serial.println("爪子：关闭");
         }
          // H：提高速度
         else if (mingling == 'H')
@@ -142,7 +156,8 @@ void chuliChuanKou()
                 yanshi,
                 minYanshi,
                 maxYanshi
-            );
+            ); Serial.print("当前延迟 = ");
+               Serial.println(yanshi);
         }
         // L：降低速度
         else if (mingling == 'L')
@@ -153,7 +168,21 @@ void chuliChuanKou()
                 minYanshi,
                 maxYanshi
             );
-    }   // x. y. z
+                Serial.print("当前延迟 = ");
+                Serial.println(yanshi);
+    }   // M：切换控制模式
+    else if (mingling == 'M')
+    {    moshi = !moshi;
+     if (moshi == 0)
+    {
+        Serial.println("当前模式：摇杆模式");
+    }
+         else
+    {
+        Serial.println("当前模式：串口模式");
+    }
+}
+    // x. y. z
     else if (mingling == 'x' ||mingling == 'y' ||mingling == 'z')
      {
             dangqianDuoji = mingling;
@@ -179,6 +208,41 @@ void chuliChuanKou()
         }
 }
 }
+// 更新XYZ舵机
+void gengxinDuoji()
+{
+    // X轴
+    if (dangqianJiaoduX < mubiaoJiaoduX)
+    {
+        dangqianJiaoduX++;
+    }
+    else if (dangqianJiaoduX > mubiaoJiaoduX)
+    {
+        dangqianJiaoduX--;
+    }
+    // Y轴
+    if (dangqianJiaoduY < mubiaoJiaoduY)
+    {
+        dangqianJiaoduY++;
+    }
+    else if (dangqianJiaoduY > mubiaoJiaoduY)
+    {
+        dangqianJiaoduY--;
+    }
+    // Z轴
+    if (dangqianJiaoduZ < mubiaoJiaoduZ)
+    {
+        dangqianJiaoduZ++;
+    }
+    else if (dangqianJiaoduZ > mubiaoJiaoduZ)
+    {
+        dangqianJiaoduZ--;
+    }
+    // 输出到舵机
+    servoX.write(dangqianJiaoduX);
+    servoY.write(dangqianJiaoduY);
+    servoZ.write(dangqianJiaoduZ);
+}
 //更新爪子函数
 void gengxinZhua()
 {
@@ -201,18 +265,22 @@ void setup()//执行一次
     servoZ.attach(SERVO_Z_PIN);
     claw.attach(CLAW_PIN);
     //开始执行角度
-    servoX.write(jiaoduX);
-    servoY.write(jiaoduY);
-    servoZ.write(jiaoduZ);
+    servoX.write(dangqianJiaoduX);
+    servoY.write(dangqianJiaoduY);
+    servoZ.write(dangqianJiaoduZ);
    claw.write(dangqianZhua);
     // 开启串口
     Serial.begin(9600);//有可能要调成38400
+    Serial.println("当前模式:摇杆模式");
 }
 
-void loop()//反复执行
-{   gengxinYaogan();
+void loop()
+{
     chuliChuanKou();
+    // 只有摇杆模式才读取摇杆
+    if (moshi == 0)
+    {gengxinYaogan();}
+    gengxinDuoji();
     gengxinZhua();
-    servoZ.write(jiaoduZ);
     delay(yanshi);
 }
