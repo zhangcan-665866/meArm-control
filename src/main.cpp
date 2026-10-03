@@ -30,6 +30,12 @@ const int minYanshi = 5;
 const int maxYanshi = 50;
 // 机械臂延迟时间(速度)
 int yanshi = 20;
+// 当前舵机
+char dangqianDuoji = 0;
+// 当前正在读取的角度
+int shuruJiaodu = 0;
+// 判断当前是否已经读取到数字
+bool youShuzi = false;
 void gengxinYaogan()
 {
     // 读取摇杆X和Y
@@ -87,9 +93,33 @@ void gengxinYaogan()
     servoY.write(jiaoduY);
 }
 //读取爪子命令函数
+void baocunJiaodu()
+{
+    // 如果没有读取到数字，就不处理
+    if (!youShuzi)
+    {
+        return;
+    }
+    // 根据当前舵机保存角度
+    switch (dangqianDuoji)
+{
+    case 'x':
+        jiaoduX = constrain(shuruJiaodu, 0, 180);
+        break;
+    case 'y':
+        jiaoduY = constrain(shuruJiaodu, 0, 180);
+        break;
+    case 'z':
+        jiaoduZ = constrain(shuruJiaodu, 0, 180);
+        break;
+    // 下一轮
+    shuruJiaodu = 0;
+    youShuzi = false;
+}
+}
 void chuliChuanKou()
 {
-    if (Serial.available() > 0)
+    while (Serial.available() > 0)
     {
         char mingling = Serial.read();
 
@@ -123,7 +153,30 @@ void chuliChuanKou()
                 minYanshi,
                 maxYanshi
             );
-    }
+    }   // x. y. z
+    else if (mingling == 'x' ||mingling == 'y' ||mingling == 'z')
+     {
+            dangqianDuoji = mingling;
+            shuruJiaodu = 0;
+            youShuzi = false;
+        }
+        // 数字
+        else if (mingling >= '0' && mingling <= '9')
+        {
+            shuruJiaodu =shuruJiaodu * 10 +(mingling - '0');//字符运算
+            youShuzi = true;
+        }
+        // 逗号
+        else if (mingling == ',')
+        {
+            baocunJiaodu();
+        }
+         // 回车 / 换行
+        else if (mingling == '\r' ||mingling == '\n')
+        {
+            baocunJiaodu();
+            dangqianDuoji = 0;
+        }
 }
 }
 //更新爪子函数
@@ -160,5 +213,6 @@ void loop()//反复执行
 {   gengxinYaogan();
     chuliChuanKou();
     gengxinZhua();
+    servoZ.write(jiaoduZ);
     delay(yanshi);
 }
