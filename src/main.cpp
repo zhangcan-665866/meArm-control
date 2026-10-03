@@ -35,6 +35,8 @@ const int minYanshi = 5;
 const int maxYanshi = 50;
 // 机械臂延迟时间(速度)
 int yanshi = 20;
+// 上一次更新舵机的时间
+unsigned long shangciGengxinShijian = 0;
 // 控制模式
 // 0 = 摇杆模式
 // 1 = 串口模式
@@ -276,11 +278,26 @@ void setup()//执行一次
 
 void loop()
 {
+    // 每轮都及时处理串口命令
     chuliChuanKou();
-    // 只有摇杆模式才读取摇杆
+
+    // 每轮都读取摇杆，保证实时响应
     if (moshi == 0)
-    {gengxinYaogan();}
-    gengxinDuoji();
-    gengxinZhua();
-    delay(yanshi);
+    {
+        gengxinYaogan();
+    }
+
+    // 获取当前运行时间
+    unsigned long xianzai = millis();
+
+    // 只有达到设定时间间隔，才更新舵机
+    if (xianzai - shangciGengxinShijian >= (unsigned long)yanshi)
+    {
+        // 记录本次更新时间
+        shangciGengxinShijian = xianzai;
+
+        // 每经过yanshi毫秒移动1度
+        gengxinDuoji();
+        gengxinZhua();
+    }
 }
