@@ -25,19 +25,19 @@ int dangqianJiaoduZ = 90;
 int mubiaoJiaoduX = 90;
 int mubiaoJiaoduY = 90;
 int mubiaoJiaoduZ = 90;
-// 爪子：0 = 完全闭合，90 = 完全张开；上电初值停在 60
-int dangqianZhua = 60;
+// 爪子当前角度(上电默认完全张开)
+int dangqianZhua = 60;   // 上电停在 60（=舵机120°）
 // 爪子目标角度
-int mubiaoZhua = 60;
+int mubiaoZhua = 60;     // 必须和上面成对
 // 摇杆中心值
 const int yaogan_zhongxin = 512;
 // 死区大小(防止轻微触动抖动)
 const int siqu = 30;
-// 摇杆采样间隔(毫秒)：采样不能太密，否则"松手回弹"两次采样之间只变几个 LSB，跟手推没法区分
+// 摇杆采样间隔(毫秒)：采样不能太密，否则"松手回弹"两次采样之间只变几个LSB，跟手推没法区分
 const int yaoganJianGe = 20;
 // 两次采样之间偏移量允许的最大变化：超过它说明摇杆在快速运动(多半是松手回弹)，本次不采纳
 const int bianhuaXianzhi = 60;
-// 四个轴的当前偏移量(留成全局，想临时打印时直接 Serial.print 就行)
+// 四个轴的当前偏移量
 int pianyiX = 0;
 int pianyiY = 0;
 int pianyiZ = 0;
@@ -49,6 +49,20 @@ int shangciPianyiZ = 0;
 int shangciPianyiZhua = 0;
 // 上一次读取摇杆的时间
 unsigned long shangciYaoganShijian = 0;
+// ===== 任务三：录制 / 播放 / 回中 =====
+// 录制：每 200ms 存一次四个轴的角度，最多 75 点 = 15 秒（占 300 字节内存）
+// 注意：UNO 只有 2048 字节内存，这个缓冲区别开太大，否则程序会崩
+const int LUZHI_JIANGE = 200;      // 采样间隔(毫秒)
+const int LUZHI_ZUIDA  = 75;      // 最大点数
+byte luzhiBuf[LUZHI_ZUIDA][4];     // [第几个点][0=X 1=Y 2=Z 3=爪子]
+int  luzhiChang = 0;               // 已录点数
+bool luzhiZhong = false;           // 正在录制
+unsigned long luzhiShijian = 0;    // 上次采样时间
+bool bofangZhong = false;          // 正在播放
+int  bofangSuoyin = 0;             // 播到第几个点
+unsigned long bofangShijian = 0;
+// 上电位置（"回中"就回到这里；以后改初始角度，它会自动跟着变）
+int huiZhongX = 90, huiZhongY = 90, huiZhongZ = 90, huiZhongZhua = 60;
 // 延迟时间范围
 const int minYanshi = 5;
 const int maxYanshi = 50;
@@ -160,9 +174,6 @@ Point song
     //8、回到初始附近
     moveTo(qu);
 }
-// 推着走的一步：dir = +1 / -1，把目标角推进 1°(不超出 0 ~ shangxian)。
-// 关键：只有舵机已经跟到目标角了，才允许再推一步。
-// 这样目标角永远贴着实际角度，松手时不会还欠着一截，让机械臂自己继续跑。
 void tuiJinYiBu(int &mubiao, int dangqian, int dir, int shangxian)
 {
     if (mubiao != dangqian)
@@ -266,11 +277,21 @@ void baocunJiaodu()
     youShuzi = false;
 
 }
+// 从"遥控板"和"电脑串口"两路取一个字符（遥控板优先），都没有返回 -1
+int duZiFu()
+{
+    if (Serial.available() > 0)
+    {
+        return Serial.read();
+    }
+    return -1;
+}
 void chuliChuanKou()
 {
-    while (Serial.available() > 0)
+    int duDao = duZiFu();
+    while (duDao >= 0)
     {
-        char mingling = Serial.read();
+        char mingling = (char)duDao;
 
         // O：爪子打开
         if (mingling == 'O')
@@ -319,6 +340,65 @@ void chuliChuanKou()
         Serial.println("当前模式：串口模式");
     }
 }
+    // ===== 任务三：遥控板按键 =====
+    // R：按键2 —— 录制 开/关
+    else if (mingling == 'R')
+    {
+        if (!luzhiZhong)
+        {
+            bofangZhong = false;      // 正在播放就先停掉
+            moshi = 0;                // 录制必须在摇杆模式
+            luzhiChang = 0;
+            luzhiZhong = true;
+            luzhiShijian = millis();
+            Serial.println("开始录制：用摇杆操控机械臂，再按一次 R 结束");
+        }
+        else
+        {
+            luzhiZhong = false;
+            Serial.print("录制结束：");
+            Serial.print(luzhiChang);
+            Serial.print(" 个点，约 ");
+            Serial.print(luzhiChang * LUZHI_JIANGE / 1000);
+            Serial.println(" 秒");
+            if (luzhiChang * LUZHI_JIANGE < 10000)
+            {
+                Serial.println("注意：不足 10 秒，考试要求大于 10 秒，建议重录");
+            }
+        }
+    }
+    // P：按键3 —— 播放上一次录制
+    else if (mingling == 'P')
+    {
+        if (luzhiChang == 0)
+        {
+            Serial.println("还没录过，先按 R 录制");
+        }
+        else if (luzhiZhong)
+        {
+            Serial.println("正在录制，先按 R 结束");
+        }
+        else
+        {
+            bofangZhong = true;
+            bofangSuoyin = 0;
+            bofangShijian = millis() - LUZHI_JIANGE;   // 立刻输出第一个点
+            Serial.print("开始播放：共 ");
+            Serial.print(luzhiChang);
+            Serial.println(" 个点");
+        }
+    }
+    // G：按键4 —— 回中(回到上电位置)
+    else if (mingling == 'G')
+    {
+        luzhiZhong = false;
+        bofangZhong = false;
+        mubiaoJiaoduX = huiZhongX;
+        mubiaoJiaoduY = huiZhongY;
+        mubiaoJiaoduZ = huiZhongZ;
+        mubiaoZhua    = huiZhongZhua;
+        Serial.println("回中");
+    }
     // x. y. z
     else if (mingling == 'x' ||mingling == 'y' ||mingling == 'z')
      {
@@ -378,6 +458,8 @@ else if(mingling=='C')
     C_fang,
     C_song
     );
+
+    duDao = duZiFu();   // 取下一个字符
 }
 }
 }
@@ -431,6 +513,49 @@ void gengxinZhua()
     // 0 -> 180°(完全闭合)，90 -> 90°(完全张开)
     claw.write(180 - dangqianZhua);
 }
+// ===== 任务三：录制采样 / 播放回放（跑在 loop 里，不阻塞）=====
+void chuliLuzhiBofang()
+{
+    unsigned long xianzai = millis();
+
+    // 录制：每 LUZHI_JIANGE 毫秒存一个点
+    if (luzhiZhong && xianzai - luzhiShijian >= (unsigned long)LUZHI_JIANGE)
+    {
+        luzhiShijian = xianzai;
+        if (luzhiChang < LUZHI_ZUIDA)
+        {
+            luzhiBuf[luzhiChang][0] = (byte)dangqianJiaoduX;
+            luzhiBuf[luzhiChang][1] = (byte)dangqianJiaoduY;
+            luzhiBuf[luzhiChang][2] = (byte)dangqianJiaoduZ;
+            luzhiBuf[luzhiChang][3] = (byte)dangqianZhua;
+            luzhiChang++;
+        }
+        else
+        {
+            luzhiZhong = false;
+            Serial.println("录制到上限(15秒)，已自动结束");
+        }
+    }
+
+    // 播放：按同样节奏，把录到的角度送回目标角
+    if (bofangZhong && xianzai - bofangShijian >= (unsigned long)LUZHI_JIANGE)
+    {
+        bofangShijian = xianzai;
+        if (bofangSuoyin < luzhiChang)
+        {
+            mubiaoJiaoduX = luzhiBuf[bofangSuoyin][0];
+            mubiaoJiaoduY = luzhiBuf[bofangSuoyin][1];
+            mubiaoJiaoduZ = luzhiBuf[bofangSuoyin][2];
+            mubiaoZhua    = luzhiBuf[bofangSuoyin][3];
+            bofangSuoyin++;
+        }
+        else
+        {
+            bofangZhong = false;
+            Serial.println("播放结束");
+        }
+    }
+}
 void setup()//执行一次
 {
     // 舵机和引脚绑定
@@ -442,22 +567,31 @@ void setup()//执行一次
     servoX.write(dangqianJiaoduX);
     servoY.write(dangqianJiaoduY);
     servoZ.write(dangqianJiaoduZ);
+    // 记下上电时的位置（任务三"回中"就回到这里）
+    huiZhongX = dangqianJiaoduX;
+    huiZhongY = dangqianJiaoduY;
+    huiZhongZ = dangqianJiaoduZ;
+    huiZhongZhua = dangqianZhua;
     gengxinZhua();   // 上电时也把爪子输出一次
     // 开启串口
     Serial.begin(9600);//有可能要调成38400
     Serial.println("当前模式:摇杆模式");
+    Serial.println("按键: R=录制  P=播放  G=回中");
 }
 
 void loop()
 {
     // 每轮处理串口命令
     chuliChuanKou();
+    // 任务三：录制采样 / 播放回放
+    chuliLuzhiBofang();
     // 获取当前运行时间
     unsigned long xianzai = millis();
 
     // 摇杆按固定间隔采样，不能每轮都读：
     // 采样太密时"松手回弹"每次只变化几个 LSB，就没办法和手慢慢推区分开了
-    if (moshi == 0 && xianzai - shangciYaoganShijian >= (unsigned long)yaoganJianGe)
+    // 播放期间不读摇杆，免得两边同时改目标角打架
+    if (moshi == 0 && !bofangZhong && xianzai - shangciYaoganShijian >= (unsigned long)yaoganJianGe)
     {
         shangciYaoganShijian = xianzai;
         gengxinYaogan();
