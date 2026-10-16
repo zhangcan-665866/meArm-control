@@ -15,7 +15,6 @@ Servo servoX;
 Servo servoY;
 Servo servoZ;
 Servo claw;
-// 爪子：0 = 完全闭合，90 = 完全张开（和 X/Y/Z 一样直接用数字，90 就是上电初值）
 // 设置初始角度为90°
 // X/Y/Z当前角度
 int dangqianJiaoduX = 90;
@@ -25,10 +24,9 @@ int dangqianJiaoduZ = 90;
 int mubiaoJiaoduX = 90;
 int mubiaoJiaoduY = 90;
 int mubiaoJiaoduZ = 90;
-// 爪子当前角度(上电默认完全张开)
-int dangqianZhua = 60;   // 上电停在 60（=舵机120°）
-// 爪子目标角度
-int mubiaoZhua = 60;     // 必须和上面成对
+// 爪子当前角度
+int dangqianZhua = 60;  
+int mubiaoZhua = 60;    
 // 摇杆中心值
 const int yaogan_zhongxin = 512;
 // 死区大小(防止轻微触动抖动)
@@ -50,8 +48,7 @@ int shangciPianyiZhua = 0;
 // 上一次读取摇杆的时间
 unsigned long shangciYaoganShijian = 0;
 // ===== 任务三：录制 / 播放 / 回中 =====
-// 录制：每 200ms 存一次四个轴的角度，最多 75 点 = 15 秒（占 300 字节内存）
-// 注意：UNO 只有 2048 字节内存，这个缓冲区别开太大，否则程序会崩
+// 录制：每 200ms 存一次四个轴的角度，最多75点=15 秒
 const int LUZHI_JIANGE = 200;      // 采样间隔(毫秒)
 const int LUZHI_ZUIDA  = 75;      // 最大点数
 byte luzhiBuf[LUZHI_ZUIDA][4];     // [第几个点][0=X 1=Y 2=Z 3=爪子]
@@ -65,9 +62,9 @@ unsigned long bofangShijian = 0;
 int huiZhongX = 90, huiZhongY = 90, huiZhongZ = 90, huiZhongZhua = 60;
 // 延迟时间范围
 const int minYanshi = 5;
-const int maxYanshi = 50;
-// 机械臂延迟时间(速度)
-int yanshi = 35;
+const int maxYanshi = 400;      // 最慢 2.5 度/秒（H/L 能调到的下限）
+// 运动速度：每走 1 度花多少毫秒（200ms = 每秒 5 度；数字越小越快）
+int yanshi = 200;
 // 上一次更新舵机的时间
 unsigned long shangciGengxinShijian = 0;
 // 控制模式
@@ -190,18 +187,6 @@ void gengxinYaogan()
     pianyiY    = analogRead(yaogan_Y_PIN)    - yaogan_zhongxin;
     pianyiZ    = analogRead(yaogan_Z_PIN)    - yaogan_zhongxin;
     pianyiZhua = analogRead(yaogan_Zhua_PIN) - yaogan_zhongxin;
-
-    // 【校准用】打开下面四行的注释，烧录后开串口监视器，手别碰摇杆，
-    // 记下四个轴稳定的偏移量；若偏离 0 超过死区，请据实测值修改第 32 行 yaogan_zhongxin
-    // Serial.print(pianyiX);    Serial.print(" ");
-    // Serial.print(pianyiY);    Serial.print(" ");
-     //Serial.print(pianyiZ);    Serial.print(" ");
-     //Serial.println(pianyiZhua);
-
-    // 【推着走】杆偏离中心就慢慢走，回中就不动 —— 不看摇杆位置，只看"推没推"。
-    // 每拍只推进 1°，而且必须等舵机先跟上，所以目标角贴着实际角度，
-    // 松手立刻停在原地，绝不会一路冲到端点。
-    // 那个"变化量"条件是滤掉松手瞬间弹簧回弹的瞬态，免得被回弹蹭着走一两度。
     if (abs(pianyiX) > siqu && abs(pianyiX - shangciPianyiX) <= bianhuaXianzhi)
     {
         tuiJinYiBu(mubiaoJiaoduX, dangqianJiaoduX, (pianyiX > 0) ? 1 : -1, 180);
@@ -277,21 +262,11 @@ void baocunJiaodu()
     youShuzi = false;
 
 }
-// 从"遥控板"和"电脑串口"两路取一个字符（遥控板优先），都没有返回 -1
-int duZiFu()
-{
-    if (Serial.available() > 0)
-    {
-        return Serial.read();
-    }
-    return -1;
-}
 void chuliChuanKou()
 {
-    int duDao = duZiFu();
-    while (duDao >= 0)
+    while (Serial.available() > 0)
     {
-        char mingling = (char)duDao;
+        char mingling = Serial.read();
 
         // O：爪子打开
         if (mingling == 'O')
@@ -459,7 +434,6 @@ else if(mingling=='C')
     C_song
     );
 
-    duDao = duZiFu();   // 取下一个字符
 }
 }
 }
@@ -469,29 +443,29 @@ void gengxinDuoji()
     // X轴
     if (dangqianJiaoduX < mubiaoJiaoduX)
     {
-        dangqianJiaoduX++;
+        dangqianJiaoduX+=3;
     }
     else if (dangqianJiaoduX > mubiaoJiaoduX)
     {
-        dangqianJiaoduX--;
+        dangqianJiaoduX-=3 ;
     }
     // Y轴
     if (dangqianJiaoduY < mubiaoJiaoduY)
     {
-        dangqianJiaoduY++;
+        dangqianJiaoduY+=3;
     }
     else if (dangqianJiaoduY > mubiaoJiaoduY)
     {
-        dangqianJiaoduY--;
+        dangqianJiaoduY-=3 ;
     }
     // Z轴
     if (dangqianJiaoduZ < mubiaoJiaoduZ)
     {
-        dangqianJiaoduZ++;
+        dangqianJiaoduZ+=3;
     }
     else if (dangqianJiaoduZ > mubiaoJiaoduZ)
     {
-        dangqianJiaoduZ--;
+        dangqianJiaoduZ-=3;
     }
     // 输出到舵机
     servoX.write(dangqianJiaoduX);
@@ -587,10 +561,6 @@ void loop()
     chuliLuzhiBofang();
     // 获取当前运行时间
     unsigned long xianzai = millis();
-
-    // 摇杆按固定间隔采样，不能每轮都读：
-    // 采样太密时"松手回弹"每次只变化几个 LSB，就没办法和手慢慢推区分开了
-    // 播放期间不读摇杆，免得两边同时改目标角打架
     if (moshi == 0 && !bofangZhong && xianzai - shangciYaoganShijian >= (unsigned long)yaoganJianGe)
     {
         shangciYaoganShijian = xianzai;
